@@ -838,6 +838,91 @@ describe("ProactivityEngine", () => {
     })
   })
 
+  it("handles hostile event data without throwing", async () => {
+    const provider: IntelligenceProvider = {
+      async evaluate(
+        event: Event,
+      ): Promise<Recommendation> {
+        return {
+          action: "SPEAK",
+          reason: "Hostile data was handled safely",
+          evidence: [
+            `Received data of type ${typeof event.data}`,
+          ],
+          message: "The event was handled safely.",
+        }
+      },
+    }
+
+    const hostileEvents: Event[] = [
+      {
+        id: "hostile-null",
+        type: "user_signal",
+        timestamp: "2026-01-01T10:00:00.000Z",
+        source: "test",
+        data: {
+          value: null,
+        },
+      },
+      {
+        id: "hostile-empty",
+        type: "user_signal",
+        timestamp: "2026-01-01T10:01:00.000Z",
+        source: "test",
+        data: {
+          value: "",
+        },
+      },
+      {
+        id: "hostile-array",
+        type: "user_signal",
+        timestamp: "2026-01-01T10:02:00.000Z",
+        source: "test",
+        data: {
+          value: [null, "", 42, true],
+        },
+      },
+      {
+        id: "hostile-nested",
+        type: "user_signal",
+        timestamp: "2026-01-01T10:03:00.000Z",
+        source: "test",
+        data: {
+          value: {
+            level1: {
+              level2: {
+                level3: {
+                  value: "hostile",
+                },
+              },
+            },
+          },
+        },
+      },
+      {
+        id: "hostile-long",
+        type: "user_signal",
+        timestamp: "2026-01-01T10:04:00.000Z",
+        source: "test",
+        data: {
+          value: "x".repeat(100_000),
+        },
+      },
+    ]
+
+    const engine = new ProactivityEngine(provider)
+
+    for (const event of hostileEvents) {
+      await expect(
+        engine.evaluate(event, baseState),
+      ).resolves.toMatchObject({
+        action: "SPEAK",
+        eventId: event.id,
+        source: "llm",
+      })
+    }
+  })
+
   it("keeps WAITING when the reconsideration condition has not been met", async () => {
     const wait: Recommendation = {
       action: "WAIT",
