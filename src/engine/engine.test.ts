@@ -923,6 +923,81 @@ describe("ProactivityEngine", () => {
     }
   })
 
+  it("rejects malformed provider recommendations without throwing", async () => {
+    const malformedRecommendations = [
+      {
+        action: "SPEAK",
+        reason: "",
+        evidence: [],
+        message: "",
+      },
+      {
+        action: "WAIT",
+        reason: "Missing reconsideration condition",
+        evidence: ["Malformed WAIT"],
+        expiresAt: "2026-01-01T11:00:00.000Z",
+      },
+      {
+        action: "WAIT",
+        reason: "Missing expiry",
+        evidence: ["Malformed WAIT"],
+        reconsiderWhen: {
+          type: "time",
+          at: "2026-01-01T10:05:00.000Z",
+        },
+      },
+      {
+        action: "WAIT",
+        reason: "Invalid time boundary",
+        evidence: ["Malformed WAIT"],
+        reconsiderWhen: {
+          type: "time",
+          at: "not-a-timestamp",
+        },
+        expiresAt: "2026-01-01T11:00:00.000Z",
+      },
+      {
+        action: "UNKNOWN",
+        reason: "Invalid action",
+        evidence: [],
+      },
+    ]
+
+    for (
+      let index = 0;
+      index < malformedRecommendations.length;
+      index += 1
+    ) {
+      const provider: IntelligenceProvider = {
+        async evaluate(): Promise<Recommendation> {
+          return malformedRecommendations[index] as Recommendation
+        },
+      }
+
+      const event: Event = {
+        id: `malformed-recommendation-${index + 1}`,
+        type: "user_signal",
+        timestamp: "2026-01-01T10:00:00.000Z",
+        source: "test",
+        data: {
+          case: index + 1,
+        },
+      }
+
+      const engine = new ProactivityEngine(provider)
+
+      await expect(
+        engine.evaluate(event, baseState),
+      ).resolves.toEqual({
+        action: "SILENCE",
+        reason:
+          "Intelligence provider returned an invalid recommendation",
+        eventId: event.id,
+        source: "deterministic",
+      })
+    }
+  })
+
   it("keeps WAITING when the reconsideration condition has not been met", async () => {
     const wait: Recommendation = {
       action: "WAIT",
